@@ -308,7 +308,15 @@ def check_npm_installed() -> Tuple[bool, str]:
         Tuple[bool, str]: (是否已安装, 版本信息)
     """
     try:
-        npm_version = subprocess.check_output(['npm', '--version'], text=True).strip()
+        if platform.system() == 'Windows':
+            # Windows系统使用shell=True来运行命令
+            npm_version = subprocess.check_output('npm --version', 
+                                                 shell=True, 
+                                                 text=True).strip()
+        else:
+            # 非Windows系统使用普通方式
+            npm_version = subprocess.check_output(['npm', '--version'], 
+                                                text=True).strip()
         return True, npm_version
     except (subprocess.SubprocessError, FileNotFoundError):
         return False, ""
