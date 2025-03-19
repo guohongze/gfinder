@@ -16,6 +16,7 @@ from .file_operations.file_utils import (
     get_root_directory
 )
 import logging
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +134,26 @@ def download_file(request):
             file_path = os.path.join(root_dir, path, filename)
             
             if os.path.exists(file_path) and os.path.isfile(file_path):
-                # 处理中文文件名
-                encoded_filename = filename.encode('utf-8').decode('latin-1')
+                # 基本的文件下载实现
                 response = FileResponse(open(file_path, 'rb'))
-                response['Content-Disposition'] = f'attachment; filename="{encoded_filename}"'
+                
+                # 使用三种方式处理文件名，兼容不同浏览器
+                # 1. 使用RFC 5987规范 (现代浏览器)
+                encoded_filename_utf8 = quote(filename)
+                # 2. ASCII编码名称 (旧浏览器)
+                ascii_filename = filename.encode('ascii', 'replace').decode('ascii')
+                # 3. 使用UTF-8编码参数
+                response['Content-Disposition'] = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename_utf8}'
+                
+                # 设置正确的MIME类型
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(file_path)
+                if content_type:
+                    response['Content-Type'] = content_type
+                else:
+                    # 默认使用二进制流类型
+                    response['Content-Type'] = 'application/octet-stream'
+                
                 return response
             else:
                 return JsonResponse({'error': '文件不存在'}, status=404)

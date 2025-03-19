@@ -139,8 +139,9 @@
           <el-table-column label="名称" sortable>
             <template #default="scope">
               <div class="file-name">
-                <el-icon v-if="scope.row.is_dir"><Folder /></el-icon>
-                <el-icon v-else><Document /></el-icon>
+                <el-icon :color="getFileIconColor(scope.row)" :size="20">
+                  <component :is="getFileIconComponent(scope.row)" />
+                </el-icon>
                 <span>{{ scope.row.name }}</span>
               </div>
             </template>
@@ -198,10 +199,9 @@
             :class="{ 'selected': isSelected(item) }"
           >
             <div class="icon">
-              <el-icon v-if="item.is_dir"><Folder /></el-icon>
-              <el-icon v-else-if="isImageFile(item)"><Picture /></el-icon>
-              <el-icon v-else-if="isTextFile(item)"><Document /></el-icon>
-              <el-icon v-else><Files /></el-icon>
+              <el-icon :color="getFileIconColor(item)" :size="viewMode === 'grid-small' ? 32 : viewMode === 'grid-medium' ? 48 : 64">
+                <component :is="getFileIconComponent(item)" />
+              </el-icon>
             </div>
             <div class="name" :title="item.name">{{ item.name }}</div>
             <div v-if="viewMode === 'grid-medium' || viewMode === 'grid-large'" class="details">
@@ -223,8 +223,9 @@
             >
               <div class="list-item">
                 <div class="icon">
-                  <el-icon v-if="item.is_dir"><Folder /></el-icon>
-                  <el-icon v-else><Document /></el-icon>
+                  <el-icon :color="getFileIconColor(item)" :size="18">
+                    <component :is="getFileIconComponent(item)" />
+                  </el-icon>
                 </div>
                 <div class="name">{{ item.name }}</div>
                 <div class="size">{{ item.is_dir ? '-' : formatFileSize(item.size) }}</div>
@@ -365,10 +366,92 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FilePreview from '../components/FilePreview.vue'
 import UploadFile from '../components/UploadFile.vue'
 import { fileApi } from '../api/file'
-import { ArrowDown, Picture, Files, Menu, Grid } from '@element-plus/icons-vue'
+import { 
+  ArrowDown, Picture, Files, Menu, Grid, Document, Folder, Finished,
+  VideoPlay, Link, Collection, Tickets, PriceTag, Connection, Film, Reading
+} from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
+
+// 获取文件图标类型
+const getFileIconComponent = (file) => {
+  if (file.is_dir) return Folder
+  
+  const ext = file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase()
+  
+  // 根据文件扩展名返回对应图标
+  switch(ext) {
+    // 图片类
+    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'svg': case 'bmp': case 'webp':
+      return Picture
+    // 文档类
+    case 'pdf': case 'doc': case 'docx': case 'txt': case 'md':
+      return Document 
+    // 表格类
+    case 'xls': case 'xlsx': case 'csv':
+      return Tickets
+    // 演示文稿
+    case 'ppt': case 'pptx':
+      return Finished
+    // 视频文件
+    case 'mp4': case 'avi': case 'mov': case 'wmv': case 'flv':
+      return VideoPlay
+    // 音频文件
+    case 'mp3': case 'wav': case 'ogg': case 'flac':
+      return Film
+    // 压缩文件
+    case 'zip': case 'rar': case '7z': case 'tar': case 'gz':
+      return Collection
+    // 代码文件
+    case 'js': case 'py': case 'java': case 'c': case 'cpp': case 'php': case 'html': case 'css':
+      return Connection
+    // 链接文件
+    case 'lnk': case 'url':
+      return Link
+    // 可执行文件
+    case 'exe': case 'msi': case 'bat': case 'sh':
+      return Reading
+    // 其他文件使用通用图标
+    default:
+      return Files
+  }
+}
+
+// 获取文件图标颜色
+const getFileIconColor = (file) => {
+  if (file.is_dir) return '#409EFF' // 文件夹蓝色
+  
+  const ext = file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase()
+  
+  // 根据文件类型返回不同颜色
+  // 图片类
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'bmp', 'webp'].includes(ext)) 
+    return '#67C23A' // 绿色
+  // 文档类
+  if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) 
+    return '#E6A23C' // 黄色
+  // 表格类
+  if (['xls', 'xlsx', 'csv'].includes(ext)) 
+    return '#19be6b' // 绿色
+  // 演示文稿
+  if (['ppt', 'pptx'].includes(ext)) 
+    return '#FF7D00' // 橙色
+  // 视频文件
+  if (['mp4', 'avi', 'mov', 'wmv', 'flv'].includes(ext)) 
+    return '#9254de' // 紫色
+  // 音频文件
+  if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) 
+    return '#722ed1' // 紫色
+  // 压缩文件
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) 
+    return '#F56C6C' // 红色
+  // 代码文件
+  if (['js', 'py', 'java', 'c', 'cpp', 'php', 'html', 'css'].includes(ext)) 
+    return '#17a2b8' // 蓝绿色
+  
+  return '#909399' // 默认灰色
+}
 
 // 状态
 const loading = ref(false)
@@ -912,22 +995,6 @@ const handleContainerClick = (event) => {
   }
 }
 
-// 判断是否为图片文件
-const isImageFile = (file) => {
-  if (file.is_dir) return false
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
-  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-  return imageExtensions.includes(ext)
-}
-
-// 判断是否为文本文件
-const isTextFile = (file) => {
-  if (file.is_dir) return false
-  const textExtensions = ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.yaml', '.yml']
-  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-  return textExtensions.includes(ext)
-}
-
 // 生命周期钩子
 onMounted(() => {
   handleRouteChange()
@@ -1045,6 +1112,13 @@ onUnmounted(() => {
 .file-name .el-icon {
   margin-right: 8px;
   font-size: 18px;
+}
+
+.file-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  object-fit: contain;
 }
 
 .context-menu {

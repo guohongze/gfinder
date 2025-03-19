@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 // 创建axios实例
 const api = axios.create({
@@ -122,47 +123,42 @@ export const fileApi = {
     })
   },
   
-  // 下载文件 - 使用浏览器重定向
+  // 下载文件
   downloadFile(path, filename) {
-    // 确保路径不以/开头或结尾，防止路径验证问题
+    // 确保路径不以/开头或结尾
     const cleanPath = path ? path.replace(/^\/+|\/+$/g, '') : '';
     const url = `/api/download?path=${encodeURIComponent(cleanPath)}&filename=${encodeURIComponent(filename)}`;
     
-    // 使用fetch代替window.open以便处理可能的错误
+    // 使用fetch以便更好地处理错误情况
     return fetch(url)
       .then(response => {
         if (!response.ok) {
-          // 如果响应不成功，尝试解析错误信息
           return response.json().then(data => {
             throw new Error(data.error || '下载失败');
+          }).catch(() => {
+            throw new Error(`下载失败 (${response.status})`);
           });
         }
         
-        // 获取响应中的文件名
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let finalFilename = filename;
-        if (contentDisposition) {
-          const matches = /filename="(.+?)"/.exec(contentDisposition);
-          if (matches && matches[1]) {
-            finalFilename = matches[1];
-          }
-        }
-        
-        // 转为blob并使用a标签下载
+        // 转为blob并下载
         return response.blob().then(blob => {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.style.display = 'none';
           a.href = url;
-          a.download = finalFilename;
+          
+          // 使用原始文件名
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
-          a.remove();
+          document.body.removeChild(a);
+          return { success: true };
         });
       })
       .catch(error => {
         console.error('下载文件失败:', error);
+        ElMessage.error(error.message || '下载文件失败');
         throw error;
       });
   },
