@@ -22,6 +22,34 @@
         </el-breadcrumb>
       </div>
       <div class="operations">
+        <!-- 视图切换按钮 -->
+        <el-dropdown @command="changeViewMode" trigger="click">
+          <el-button>
+            <el-icon><Menu /></el-icon>
+            视图
+            <el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item :command="'table'" :class="{ 'active-view': viewMode === 'table' }">
+                <el-icon><Document /></el-icon> 详细信息
+              </el-dropdown-item>
+              <el-dropdown-item :command="'grid-small'" :class="{ 'active-view': viewMode === 'grid-small' }">
+                <el-icon><Grid /></el-icon> 小图标
+              </el-dropdown-item>
+              <el-dropdown-item :command="'grid-medium'" :class="{ 'active-view': viewMode === 'grid-medium' }">
+                <el-icon><Grid /></el-icon> 中图标
+              </el-dropdown-item>
+              <el-dropdown-item :command="'grid-large'" :class="{ 'active-view': viewMode === 'grid-large' }">
+                <el-icon><Grid /></el-icon> 大图标
+              </el-dropdown-item>
+              <el-dropdown-item :command="'list'" :class="{ 'active-view': viewMode === 'list' }">
+                <el-icon><Menu /></el-icon> 列表
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        
         <el-button type="primary" @click="refreshFiles">
           <el-icon><Refresh /></el-icon>
           刷新
@@ -94,7 +122,9 @@
         @drop.prevent="onDrop"
         :class="{ 'drag-over': isDragOver }"
       >
+        <!-- 表格视图 (详细信息) -->
         <el-table
+          v-if="viewMode === 'table'"
           ref="fileTable"
           :data="filesList"
           style="width: 100%"
@@ -154,6 +184,53 @@
             </template>
           </el-table-column>
         </el-table>
+        
+        <!-- 网格视图 (图标视图) -->
+        <div v-else-if="viewMode.startsWith('grid')" class="grid-view" :class="viewMode">
+          <div
+            v-for="(item, index) in filesList"
+            :key="index"
+            class="grid-item"
+            @dblclick="handleItemDblClick(item)"
+            @click="handleItemClick(item, $event)"
+            @contextmenu.prevent="handleItemContextMenu(item, $event)"
+            :class="{ 'selected': isSelected(item) }"
+          >
+            <div class="icon">
+              <el-icon v-if="item.is_dir"><Folder /></el-icon>
+              <el-icon v-else-if="isImageFile(item)"><Picture /></el-icon>
+              <el-icon v-else-if="isTextFile(item)"><Document /></el-icon>
+              <el-icon v-else><Files /></el-icon>
+            </div>
+            <div class="name" :title="item.name">{{ item.name }}</div>
+            <div v-if="viewMode === 'grid-medium' || viewMode === 'grid-large'" class="details">
+              <small>{{ item.is_dir ? '文件夹' : formatFileSize(item.size) }}</small>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 列表视图 -->
+        <div v-else-if="viewMode === 'list'" class="list-view">
+          <ul>
+            <li
+              v-for="(item, index) in filesList"
+              :key="index"
+              @dblclick="handleItemDblClick(item)"
+              @click="handleItemClick(item, $event)"
+              @contextmenu.prevent="handleItemContextMenu(item, $event)"
+              :class="{ 'selected': isSelected(item) }"
+            >
+              <div class="list-item">
+                <div class="icon">
+                  <el-icon v-if="item.is_dir"><Folder /></el-icon>
+                  <el-icon v-else><Document /></el-icon>
+                </div>
+                <div class="name">{{ item.name }}</div>
+                <div class="size">{{ item.is_dir ? '-' : formatFileSize(item.size) }}</div>
+              </div>
+            </li>
+          </ul>
+        </div>
       </div>
     </main>
 
@@ -281,12 +358,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FilePreview from '../components/FilePreview.vue'
 import UploadFile from '../components/UploadFile.vue'
 import { fileApi } from '../api/file'
+import { ArrowDown, Picture, Files, Menu, Grid } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,6 +406,9 @@ const contextMenu = ref({
 
 // 拖拽状态
 const isDragOver = ref(false)
+
+// 视图模式状态
+const viewMode = ref(localStorage.getItem('gfinder-view-mode') || 'table')
 
 // 计算面包屑项
 const breadcrumbItems = computed(() => {
@@ -762,6 +843,76 @@ const onDrop = async (event) => {
   }
 }
 
+// 更改视图模式
+const changeViewMode = (mode) => {
+  viewMode.value = mode
+  localStorage.setItem('gfinder-view-mode', mode)
+}
+
+// 检查文件是否被选中
+const isSelected = (item) => {
+  return selectedFiles.value.some(file => file.name === item.name)
+}
+
+// 处理项目点击
+const handleItemClick = (item, event) => {
+  // 按住Ctrl键可以多选
+  if (event.ctrlKey) {
+    const index = selectedFiles.value.findIndex(file => file.name === item.name)
+    if (index === -1) {
+      selectedFiles.value.push(item)
+    } else {
+      selectedFiles.value.splice(index, 1)
+    }
+  } else {
+    selectedFiles.value = [item]
+  }
+}
+
+// 处理项目双击
+const handleItemDblClick = (item) => {
+  if (item.is_dir) {
+    openFolder(item)
+  } else if (isPreviewable(item)) {
+    previewFile(item)
+  } else {
+    downloadFile(item)
+  }
+}
+
+// 处理项目右键菜单
+const handleItemContextMenu = (item, event) => {
+  // 如果项目未被选中，则选中它
+  if (!isSelected(item)) {
+    selectedFiles.value = [item]
+  }
+  
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    item: item
+  }
+  
+  document.addEventListener('click', hideContextMenu, { once: true })
+}
+
+// 判断是否为图片文件
+const isImageFile = (file) => {
+  if (file.is_dir) return false
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  return imageExtensions.includes(ext)
+}
+
+// 判断是否为文本文件
+const isTextFile = (file) => {
+  if (file.is_dir) return false
+  const textExtensions = ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.yaml', '.yml']
+  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  return textExtensions.includes(ext)
+}
+
 // 生命周期钩子
 onMounted(() => {
   handleRouteChange()
@@ -911,5 +1062,153 @@ onUnmounted(() => {
 .context-menu .el-icon {
   margin-right: 8px;
   font-size: 16px;
+}
+
+/* 视图样式 */
+.active-view {
+  color: #409eff;
+  font-weight: bold;
+}
+
+/* 网格视图样式 */
+.grid-view {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+}
+
+.grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 8px;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.grid-item:hover {
+  background-color: #f5f7fa;
+}
+
+.grid-item.selected {
+  background-color: #ecf5ff;
+}
+
+.grid-view .icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.grid-view .name {
+  margin-top: 5px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-view .details {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 小图标视图 */
+.grid-small .grid-item {
+  width: 80px;
+  height: 80px;
+}
+
+.grid-small .icon {
+  font-size: 24px;
+}
+
+.grid-small .name {
+  width: 75px;
+  white-space: nowrap;
+}
+
+/* 中图标视图 */
+.grid-medium .grid-item {
+  width: 120px;
+  height: 120px;
+}
+
+.grid-medium .icon {
+  font-size: 36px;
+}
+
+.grid-medium .name {
+  width: 110px;
+  white-space: nowrap;
+}
+
+/* 大图标视图 */
+.grid-large .grid-item {
+  width: 160px;
+  height: 160px;
+}
+
+.grid-large .icon {
+  font-size: 48px;
+}
+
+.grid-large .name {
+  width: 150px;
+  white-space: nowrap;
+}
+
+.grid-large .icon .el-icon {
+  font-size: 48px;
+}
+
+/* 列表视图样式 */
+.list-view {
+  width: 100%;
+}
+
+.list-view ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-view li {
+  padding: 8px 12px;
+  border-bottom: 1px solid #ebeef5;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.list-view li:hover {
+  background-color: #f5f7fa;
+}
+
+.list-view li.selected {
+  background-color: #ecf5ff;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+}
+
+.list-item .icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.list-item .name {
+  flex: 1;
+}
+
+.list-item .size {
+  margin-left: auto;
+  color: #909399;
+  font-size: 14px;
 }
 </style> 
