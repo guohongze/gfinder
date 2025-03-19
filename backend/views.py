@@ -170,7 +170,7 @@ def preview_file(request):
         path = request.GET.get('path', '')
         filename = request.GET.get('filename', '')
         
-        if not path or not filename or not is_valid_path(os.path.join(path, filename)):
+        if not filename or not is_valid_path(os.path.join(path.strip('/'), filename)):
             return JsonResponse({'error': '路径不合法'}, status=400)
             
         try:
