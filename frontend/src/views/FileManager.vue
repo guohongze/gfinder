@@ -120,6 +120,7 @@
         @dragover.prevent="onDragOver"
         @dragleave.prevent="onDragLeave"
         @drop.prevent="onDrop"
+        @click="handleContainerClick"
         :class="{ 'drag-over': isDragOver }"
       >
         <!-- 表格视图 (详细信息) -->
@@ -895,6 +896,20 @@ const handleItemContextMenu = (item, event) => {
   }
   
   document.addEventListener('click', hideContextMenu, { once: true })
+}
+
+// 处理容器点击事件（清除选择）
+const handleContainerClick = (event) => {
+  // 只有当点击的是容器本身而不是内部的项目时才清除选择
+  const isContainer = event.target.classList.contains('file-container') || 
+                      (event.target.closest('.file-container') && 
+                       !event.target.closest('.grid-item') && 
+                       !event.target.closest('.list-item') && 
+                       !event.target.closest('tr'));
+  
+  if (isContainer) {
+    selectedFiles.value = [];
+  }
 }
 
 // 判断是否为图片文件
