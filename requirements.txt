@@ -1,0 +1,4 @@
+Django==5.1.7
+django-cors-headers==4.3.1
+python-magic==0.4.27  # 用于文件类型检测
+Pillow==10.2.0  # 用于图片处理 
